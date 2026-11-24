@@ -59,10 +59,17 @@ class DeviceProfile(
      * 5 s where Android holds app starts after Home (TCL MT5879). The owner's call, so only by profile.
      */
     val neverFilterKeys: Boolean = false,
+    /**
+     * Key codes Home Guard swallows system-wide, whatever is in front. For remotes whose gear
+     * key opens the firmware's settings or whose source key opens the input picker, which a
+     * child uses to leave the launcher and its limits: taken in the key filter, the key never
+     * reaches any app. Listed as the numeric keycodes (176 is SETTINGS, 178 is TV_INPUT).
+     */
+    val blockedKeys: Set<Int> = emptySet(),
 ) {
     val isEmpty get() = hiddenHardware.isEmpty() && labels.isEmpty() && xiaomiSourceIds.isEmpty() &&
         xiaomiFallbackSourceIds.isEmpty() && !ignoresPictureBacklight && bootStockMs <= 0 &&
-        !ignoresScreenBrightness && !filterHomeAlways && !neverFilterKeys
+        !ignoresScreenBrightness && !filterHomeAlways && !neverFilterKeys && blockedKeys.isEmpty()
 
     /** The same fields `devices.json` uses, without the matching ones (models, buildMajorBelow, buildAtLeast). */
     fun toJson(): JSONObject = JSONObject().apply {
@@ -75,6 +82,7 @@ class DeviceProfile(
         if (ignoresScreenBrightness) put("ignoresScreenBrightness", true)
         if (filterHomeAlways) put("filterHomeAlways", true)
         if (neverFilterKeys) put("neverFilterKeys", true)
+        if (blockedKeys.isNotEmpty()) put("blockedKeys", JSONArray(blockedKeys.sorted()))
     }
 
     /** Where the profile in use came from, for the diagnostics. */
@@ -158,6 +166,9 @@ class DeviceProfile(
                 ignoresScreenBrightness = o.optBoolean("ignoresScreenBrightness", false),
                 filterHomeAlways = o.optBoolean("filterHomeAlways", false),
                 neverFilterKeys = o.optBoolean("neverFilterKeys", false),
+                blockedKeys = o.optJSONArray("blockedKeys")?.let { a ->
+                    (0 until a.length()).mapNotNull { i -> a.optInt(i, -1).takeIf { it > 0 } }.toSet()
+                } ?: emptySet(),
             )
         }
 

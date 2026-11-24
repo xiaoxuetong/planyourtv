@@ -1756,6 +1756,15 @@ class HomeGuardService : AccessibilityService() {
         }
         // Any key that is done: whatever it did to the volume (Control Center's slider) is in.
         if (event.action == KeyEvent.ACTION_UP) volumeSeen = volumeNow()
+        // Blocked by this TV's device profile: gear key opening firmware settings,
+        // source key opening the input picker. Swallowed everywhere, whatever is in front,
+        // so they can never reach Settings or an input switch and take the child out of Home.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
+            DeviceProfile.current(this).blockedKeys.contains(event.keyCode)) {
+            DiagLog.i("guard: blocked key ${KeyEvent.keyCodeToString(event.keyCode)} "
+                + "(code ${event.keyCode}, scan ${event.scanCode}) swallowed")
+            return true
+        }
         if (event.keyCode != KeyEvent.KEYCODE_HOME && !isStrayHome(event)) return false
         if (takeCecHome(event)) return true
         // A profile's filterHomeAlways takes Home with Aerial the default too: Coocaa starts its own
