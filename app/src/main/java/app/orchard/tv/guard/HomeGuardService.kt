@@ -1618,10 +1618,14 @@ class HomeGuardService : AccessibilityService() {
         // starts its own launcher on Home through a category of its own whatever Home resolves
         // to, and on 8R39_K5C (Android 8) filterHomeAlways written over ADB changed nothing, a
         // held volume key still repeating, so the filter never came on (issue #1462).
+        // Blocked keys need the filter wherever they land: on a MediaTek projector (Android 9)
+        // whose profile blocks the remote's gear and source keys, the wanted line above kept the
+        // filter off with Aerial the default Home, and every blocked press reached the firmware.
+        val blockedWanted = DeviceProfile.current(this).blockedKeys.isNotEmpty()
         val homeWanted = wanted && (!isDefaultHome() || defaultHomeNeedsHomeFilter || always)
         val cecWanted = !screenOff && !mouseHang && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
-        var want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
+        var want = if (homeWanted || cecWanted || blockedWanted) info.flags or flag else info.flags and flag.inv()
         if (GuardSetup.isUserUnlocked(this) && DeviceProfile.current(this).neverFilterKeys) want = want and flag.inv()
         if (keyFilterRival) want = want and AccessibilityServiceInfo.DEFAULT.inv()
         if (want == info.flags) return
