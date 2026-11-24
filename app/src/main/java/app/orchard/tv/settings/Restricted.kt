@@ -210,6 +210,9 @@ object Restricted {
         app = context.applicationContext
         val p = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         enabled = p.getBoolean("enabled", false)
+        // The settings freeze outlives the process (package-restrictions), but this process may
+        // be the first to run after a firmware that reset it: restore what the mode wants.
+        if (enabled) SettingsGuard.freeze(app)
         kind = RestrictedKind.of(p.getString("kind", null))
         allowed = p.getString("allowed", null)?.split('\n')?.filter { it.isNotEmpty() } ?: emptyList()
         allowedPackages = p.getStringSet("allowed_packages", null)?.toSet() ?: emptySet()
@@ -240,6 +243,9 @@ object Restricted {
         // Turned on in setup: the parent is still there; the mode starts with "Start" or by itself.
         suspended = on
         prefs().edit { putBoolean("enabled", on) }
+        // Frozen through suspend too: the PIN that suspends the mode does not hand back the
+        // settings the mode exists to keep away (see SettingsGuard).
+        if (on) SettingsGuard.freeze(app) else SettingsGuard.unfreeze(app)
     }
 
     fun chooseKind(k: RestrictedKind) {

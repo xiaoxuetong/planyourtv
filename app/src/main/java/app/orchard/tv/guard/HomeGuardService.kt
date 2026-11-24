@@ -43,6 +43,7 @@ import app.orchard.tv.system.DiagLog
 import app.orchard.tv.system.SystemProbe
 import app.orchard.tv.policy.PolicyProduct
 import app.orchard.tv.policy.LockLaunchPermit
+import com.planyourtv.policy.PolicyMode
 import app.orchard.tv.policy.PolicyModeCoordinator
 import app.orchard.tv.policy.PolicyCountdownOverlay
 import com.planyourtv.policy.LockSurfaceRelay
@@ -1621,7 +1622,8 @@ class HomeGuardService : AccessibilityService() {
         // Blocked keys need the filter wherever they land: on a MediaTek projector (Android 9)
         // whose profile blocks the remote's gear and source keys, the wanted line above kept the
         // filter off with Aerial the default Home, and every blocked press reached the firmware.
-        val blockedWanted = DeviceProfile.current(this).blockedKeys.isNotEmpty()
+        // Only while Kids or Elders mode is on: the keys stay live the rest of the time.
+        val blockedWanted = DeviceProfile.current(this).blockedKeys.isNotEmpty() && kidsModeEnabled()
         val homeWanted = wanted && (!isDefaultHome() || defaultHomeNeedsHomeFilter || always)
         val cecWanted = !screenOff && !mouseHang && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
@@ -1743,6 +1745,15 @@ class HomeGuardService : AccessibilityService() {
     private fun filterHomeAlways(): Boolean =
         GuardSetup.isUserUnlocked(this) && DeviceProfile.current(this).filterHomeAlways
 
+    /**
+     * The parent center's child-mode switch on: keys and the settings freeze answer to the
+     * switch itself (any guard mode but NONE), not to a live rule session — a parent who turned
+     * the mode on expects the gear and source keys dead even between sessions. The coordinator's
+     * mode is restored from storage before this runs, so a boot lands with the right answer.
+     */
+    private fun kidsModeEnabled(): Boolean =
+        runCatching { PolicyModeCoordinator.mode != PolicyMode.NONE }.getOrDefault(false)
+
     private val defaultHomeNeedsHomeFilter by lazy {
         fun installed(name: String) = runCatching { packageManager.getPackageInfo(name, 0) }.isSuccess
         (installed("com.cvte.factory.at") && !installed("com.tianci.system")) || installed("com.yunos.tv.homeshell")
@@ -1760,10 +1771,13 @@ class HomeGuardService : AccessibilityService() {
         }
         // Any key that is done: whatever it did to the volume (Control Center's slider) is in.
         if (event.action == KeyEvent.ACTION_UP) volumeSeen = volumeNow()
-        // Blocked by this TV's device profile: gear key opening firmware settings,
-        // source key opening the input picker. Swallowed everywhere, whatever is in front,
-        // so they can never reach Settings or an input switch and take the child out of Home.
+        // Blocked by this TV's device profile, while Kids or Elders mode is on: gear key opening
+        // firmware settings, source key opening the input picker. Swallowed everywhere, whatever
+        // is in front, so they can never reach Settings or an input switch and leave the mode.
+        // The mode's settings freeze covers the paths the key filter misses (firmware panels,
+        // boot-time GlobalKey), and is undone when the mode turns off.
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
+            kidsModeEnabled() &&
             DeviceProfile.current(this).blockedKeys.contains(event.keyCode)) {
             DiagLog.i("guard: blocked key ${KeyEvent.keyCodeToString(event.keyCode)} "
                 + "(code ${event.keyCode}, scan ${event.scanCode}) swallowed")

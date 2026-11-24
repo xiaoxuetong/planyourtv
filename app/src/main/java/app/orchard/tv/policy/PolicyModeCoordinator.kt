@@ -16,6 +16,7 @@ import app.orchard.tv.quiz.QuizChallenge
 import app.orchard.tv.quiz.QuizConfigDocumentSync
 import app.orchard.tv.quiz.QuizConfigSync
 import app.orchard.tv.quiz.QuizRuntime
+import app.orchard.tv.settings.SettingsGuard
 import com.planyourtv.policy.AccessMode
 import com.planyourtv.policy.Activation
 import com.planyourtv.policy.GuardStatus
@@ -326,6 +327,7 @@ object PolicyModeCoordinator {
             // unlock. After a restart the guard is enforcing again, so the proof is dropped.
             parentAuth.onGuardStatus(_state.value.guardState)
             reportModeNow()
+            syncSettingsGuard()
         } else {
             // Later callers (HomeGuard/MainActivity) must not re-enable the wrong engine.
             PolicyRuntime.start(
@@ -2119,8 +2121,23 @@ object PolicyModeCoordinator {
         _state.value = currentEngineState()
         _revision.value = _revision.value + 1L
         reportModeNow()
+        syncSettingsGuard()
         if (mode == PolicyMode.CLOUD && PolicyRuntime.state.value.bound) {
             PolicyAppInventory.requestSync("mode-cloud", immediate = true)
+        }
+    }
+
+    /**
+     * The firmware's settings package follows the child-mode switch: frozen while a guard mode
+     * is on, live when off. Frozen state is kept by PackageManager across boots, so the gear key
+     * and its floating panels cannot open from the moment of power-on. The parent center's own
+     * switch lives in this app and is unaffected by the freeze.
+     */
+    private fun syncSettingsGuard() {
+        val app = context ?: return
+        Handler(Looper.getMainLooper()).post {
+            if (mode == PolicyMode.NONE) SettingsGuard.unfreeze(app)
+            else SettingsGuard.freeze(app)
         }
     }
 
