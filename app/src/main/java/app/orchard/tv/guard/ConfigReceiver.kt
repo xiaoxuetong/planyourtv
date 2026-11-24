@@ -67,6 +67,7 @@ class ConfigReceiver : BroadcastReceiver() {
         intent.getStringExtra("device_profile")?.let { json ->
             val ok = DeviceProfile.setOwn(context, json.takeUnless { it.trim() == "default" })
             val profile = DeviceProfile.current(context).toJson()
+            DiagLog.i("guard: device_profile ${if (ok) "set" else "rejected"}: $profile (${DeviceProfile.origin(context)})")
             resultData = if (ok) "device_profile=$profile (${DeviceProfile.origin(context)})" else "device_profile not valid JSON; kept $profile"
             return
         }
